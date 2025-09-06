@@ -1,0 +1,64 @@
+## Interface: 11200
+## Title: |cff33ffccpf|cffffffffUI|cffaaaaaa [Addon Skinner]
+## Author: dein0s and RoadBlock
+## Notes: External module for |cff33ffccpf|cffffffffUI
+## Version: 0.4
+## Dependencies: pfUI
+## X-LocalName: Addon Skinner
+
+# main
+pfUI-addonskinner.lua
+pfUI-addonskinner-api.lua
+pfUI-addonskinner-config.lua
+pfUI-addonskinner-gui.lua
+
+# skins
+skins\AdvancedTradeskillWindow.lua
+skins\Artisan.lua
+skins\Atlas.lua
+skins\AtlasLoot.lua
+skins\AtlasQuest.lua
+skins\AutoProfit.lua
+skins\BigWigs.lua
+skins\BookStore.lua
+skins\BugSack.lua
+skins\CallToArms.lua
+skins\Clique.lua
+skins\CloseUP.lua
+skins\ColorPickerPlus.lua
+skins\Decursive.lua
+skins\EQL3.lua
+skins\ES_GuildCheckGUI.lua
+skins\GearMenu.lua
+skins\ignitestatus.lua
+skins\ItemHints.lua
+skins\ItemRack.lua
+skins\LevelRange.lua
+skins\LootBlare.lua
+skins\LoseControl.lua
+skins\ModifiedPowerAuras.lua
+skins\MouseOverSounds.lua
+skins\MTLove.lua
+skins\Outfitter.lua
+skins\pfQuest.lua
+skins\Possessions.lua
+skins\QuickHeal.lua
+skins\RABuffs.lua
+skins\raidTemplate.lua
+skins\RingMenu.lua
+skins\shootyepgp.lua
+skins\SP_Overpower.lua
+skins\SP_SwingTimer.lua
+skins\SuperIgnore.lua
+skins\SuperInspect_UI.lua
+skins\SuperMacro.lua
+skins\TalentSequence.lua
+skins\Thaliz.lua
+skins\TimeManager.lua
+skins\TradesBar.lua
+skins\TrinketMenu.lua
+skins\TurtleCount.lua
+skins\TurtleZoneCount.lua
+skins\UnitXP_SP3_Addon.lua
+skins\YaHT.lua
+skins\ZHunterMod.lua
