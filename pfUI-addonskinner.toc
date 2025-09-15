@@ -47,6 +47,7 @@ skins\RABuffs.lua
 skins\raidTemplate.lua
 skins\RingMenu.lua
 skins\shootyepgp.lua
+skins\simpleAuras.lua
 skins\SP_Overpower.lua
 skins\SP_SwingTimer.lua
 skins\SuperIgnore.lua
