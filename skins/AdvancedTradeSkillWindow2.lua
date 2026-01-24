@@ -2,18 +2,29 @@
 pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
   -- upvalue the pfUI methods we use to avoid repeated lookups
   local penv = pfUI:GetEnvironment()
-  local StripTextures, CreateBackdrop, SkinCloseButton, SkinButton, SkinArrowButton, 
+  local StripTextures, CreateBackdrop, CreateBackdropShadow, SkinCloseButton, SkinButton, SkinArrowButton, 
     SkinCheckbox, SkinCollapseButton, SetAllPointsOffset, SetHighlight, SkinScrollbar, 
-    HookScript, SkinDropDown, SkinTab = 
-  penv.StripTextures, penv.CreateBackdrop, penv.SkinCloseButton, penv.SkinButton, penv.SkinArrowButton, 
+    HookScript, SkinDropDown = 
+  penv.StripTextures, penv.CreateBackdrop, penv.CreateBackdropShadow, penv.SkinCloseButton, penv.SkinButton, penv.SkinArrowButton, 
   penv.SkinCheckbox, penv.SkinCollapseButton, penv.SetAllPointsOffset, penv.SetHighlight, penv.SkinScrollbar, 
-  penv.HookScript, penv.SkinDropDown, penv.SkinTab
+  penv.HookScript, penv.SkinDropDown
 
   -- Helper utilities to reduce duplication
   local function StripAndBackdrop(frame, alpha, inset)
     StripTextures(frame)
     CreateBackdrop(frame, nil, nil, alpha or .75)
     if inset and frame.backdrop then SetAllPointsOffset(frame.backdrop, frame, inset) end
+  end
+
+  -- Ensure a pfUI backdrop exists on the given frame (used to centralize OnShow reapply logic)
+  local function EnsureBackdrop(frame, alpha, useShadow)
+    if not frame then return end
+    if frame.backdrop == nil then
+      StripTextures(frame)
+      frame:SetBackdrop(nil)
+      CreateBackdrop(frame, nil, nil, alpha or .85)
+      if useShadow and CreateBackdropShadow then CreateBackdropShadow(frame) end
+    end
   end
 
   local function SafeStripAndBackdrop(frame, alpha, inset)
@@ -43,9 +54,10 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
 
   -- Main Frame (ATSWFrame)
   if ATSWFrame then
-    local rawborder, border = 1, 1
+    local border = 1
     if pfUI and pfUI.skin and pfUI.skin.GetBorderSize then
-      rawborder, border = pfUI.skin.GetBorderSize()
+      local _, b = pfUI.skin.GetBorderSize()
+      if b then border = b end
     end
     
     ATSWFrame:DisableDrawLayer("BACKGROUND")
@@ -111,7 +123,69 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
         tab:SetFrameLevel(ATSWFrame:GetFrameLevel() + 5)
       end
     end
-    
+
+    -- Ensure Disguise tab icons are cropped and skinned like SpellBookSkillLineTab (pfUI style)
+    local function ReskinDisguiseTabIcons()
+      local disguiseTex = 'Interface\\Icons\\Ability_Rogue_Disguise'
+      for i = 1, ATSW_MAX_TRADESKILL_TABS do
+        local tab = getglobal('ATSWFrameTab' .. i)
+        if tab then
+          local tex = tab:GetNormalTexture()
+          local name = tab.Name
+          local tpath = nil
+          if tex and tex.GetTexture then
+            local ok, val = pcall(function() return tex:GetTexture() end)
+            if ok then tpath = val end
+          end
+
+          if tpath == disguiseTex or (name and string.lower(name) == string.lower('Disguise')) then
+            -- Ensure a normal texture exists so SkinButton receives a texture argument
+            if not tex or not tex.GetTexture then
+              tab:SetNormalTexture(disguiseTex)
+              tex = tab:GetNormalTexture()
+            else
+              local ok2, val2 = pcall(function() return tex:GetTexture() end)
+              if not ok2 or val2 == nil then
+                tab:SetNormalTexture(disguiseTex)
+                tex = tab:GetNormalTexture()
+              end
+            end
+
+            -- Apply the same visual treatment as the other ATSW tabs (no extra scaling)
+            StripTextures(tab)
+            SkinButton(tab, nil, nil, nil, tex)
+            -- Ensure the normal texture is set to the Disguise icon (SkinButton may replace regions)
+            tab:SetNormalTexture(disguiseTex)
+            local newTex = tab:GetNormalTexture()
+            if newTex and newTex.SetTexCoord then
+              newTex:SetTexCoord(.08, .92, .08, .92)
+              newTex:Show()
+            end
+
+            -- Ensure selection backdrop uses the configured tab color
+            if tab.backdrop and TAB_SELECTED_COLOR then
+              tab.backdrop:SetBackdropColor(TAB_SELECTED_COLOR.r, TAB_SELECTED_COLOR.g, TAB_SELECTED_COLOR.b, TAB_SELECTED_ALPHA)
+            end
+
+            tab:SetFrameLevel(ATSWFrame:GetFrameLevel() + 5)
+          end
+        end
+      end
+    end
+
+    -- Hook configuration function to reskin tabs if they are added/updated later
+    local cfg_orig = getglobal('ATSW_ConfigureSkillButtons')
+    if type(cfg_orig) == 'function' then
+      local function cfg_wrapped(exception)
+        cfg_orig(exception)
+        ReskinDisguiseTabIcons()
+      end
+      rawset(_G, 'ATSW_ConfigureSkillButtons', cfg_wrapped)
+    end
+
+    -- Run once to cover the current state
+    ReskinDisguiseTabIcons()
+
     -- Recipe list scrollbar
     SafeSkinScrollbar(ATSWListScrollFrame, ATSWListScrollFrameScrollBar)
     
@@ -161,29 +235,82 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
     else
       HookScript(ATSWFrame, "OnShow", EnsureTaskListBackdrop)
     end
-    
+
+    -- Create a backdrop to replace the recipe background artwork (ATSWWeb) so visuals match pfUI
+    local function EnsureRecipeListBackdrop()
+      if not ATSWListScrollFrame then return end
+      if ATSWRecipeListBackdrop and ATSWRecipeListBackdrop.pfuiCreated then return end
+
+      -- Hide the original decorative background artwork if present
+      if ATSWWeb then ATSWWeb:Hide() end
+
+      local fb = CreateFrame("Frame", "ATSWRecipeListBackdrop", ATSWFrame)
+      fb:SetPoint("TOPLEFT", ATSWListScrollFrame, "TOPLEFT", 2, 3)
+      fb:SetPoint("BOTTOMRIGHT", ATSWListScrollFrame, "BOTTOMRIGHT", 0, 1)
+      CreateBackdrop(fb, nil, nil, .6)
+
+      -- Place it behind the list content
+      local fl = ATSWListScrollFrame and ATSWListScrollFrame:GetFrameLevel() or 1
+      fb:SetFrameLevel(math.max(1, fl - 1))
+
+      fb.pfuiCreated = true
+      ATSWRecipeListBackdrop = fb
+    end
+
+    if ATSWListScrollFrame then
+      EnsureRecipeListBackdrop()
+    else
+      HookScript(ATSWFrame, "OnShow", EnsureRecipeListBackdrop)
+    end
+
+    -- Always clear/strip ATSW's recipe-background texture and ensure our backdrop persists
+    if ATSWBackground and ATSWBackground.SetTexture then
+      ATSWBackground:SetTexture(nil)
+      ATSWBackground:Hide()
+    end
+
+    local original_UpdateBackground = getglobal('ATSW_UpdateBackground')
+    if type(original_UpdateBackground) == 'function' then
+      local function wrapped_UpdateBackground()
+        -- Call original (in case other behavior runs)
+        pcall(original_UpdateBackground)
+        -- Remove the texture it sets and ensure pfUI backdrop is shown
+        if ATSWBackground and ATSWBackground.SetTexture then
+          ATSWBackground:SetTexture(nil)
+          ATSWBackground:Hide()
+        end
+        EnsureRecipeListBackdrop()
+      end
+      rawset(_G, 'ATSW_UpdateBackground', wrapped_UpdateBackground)
+    end
+
     -- Progress bar
     if ATSWProgressBar then
+      -- Apply pfUI statusbar styling, but preserve ATSW decorative textures so functionality remains
       StripTextures(ATSWProgressBar)
       ATSWProgressBar:SetStatusBarTexture("Interface\\AddOns\\pfUI\\img\\bar")
       CreateBackdrop(ATSWProgressBar)
 
-      -- Replace the thick Blizzard-style progress border with a thin outline (no fill)
-      if ATSWProgressBarBorder then
-        -- Hide the entire border frame (remove thick Blizzard border around task)
-        ATSWProgressBarBorder:Hide()
-      end
-
-      -- Ensure glow/spark textures are hidden to keep visuals minimal
-      if ATSWProgressBarGlow and ATSWProgressBarGlow.SetTexture then
-        ATSWProgressBarGlow:SetTexture(nil)
-      end
-      if ATSWProgressBarSpark and ATSWProgressBarSpark.SetTexture then
-        ATSWProgressBarSpark:SetTexture(nil)
+      -- Keep ATSW border/glow/spark untouched so they blend with the bar; only adjust framelevel
+      if ATSWTaskScrollFrame and ATSWTaskScrollFrame.backdrop then
+        ATSWProgressBar:SetFrameLevel(ATSWTaskScrollFrame.backdrop:GetFrameLevel() + 50)
+      elseif ATSWFrame and ATSWFrame.GetFrameLevel then
+        ATSWProgressBar:SetFrameLevel(ATSWFrame:GetFrameLevel() + 50)
       end
     end
+
+    -- Stop button: skin with pfUI visuals but don't reparent forcibly (keeps original behavior)
     if ATSWProgressBarStop then
+      -- Apply pfUI button skin and ensure it appears above the bar
       SkinButton(ATSWProgressBarStop)
+      ATSWProgressBarStop:ClearAllPoints()
+      if ATSWProgressBar and ATSWProgressBar.GetName and _G[ATSWProgressBar:GetName()] then
+        -- anchor to the right edge of the bar if present
+        ATSWProgressBarStop:SetPoint("RIGHT", ATSWProgressBar, "RIGHT", -2, 0)
+        ATSWProgressBarStop:SetFrameLevel((ATSWProgressBar:GetFrameLevel() or 0) + 3)
+      end
+
+      ATSWProgressBarStop:Show()
     end
     
     -- Dropdown menus
@@ -251,13 +378,66 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
       if btn then
         StripTextures(btn)
         SkinCollapseButton(btn)
-
-        -- Recipe tooltip skinning is WIP and temporarily removed to avoid unexpected behavior.
-        -- TODO: Revisit and implement a robust skinning approach for `ATSWRecipeTooltip` and
-        -- `ATSWRecipeItemTooltip` later. (Currently handled by ATSW extras.)
       end
     end
-    
+
+    -- Collapse overlay helpers (tidy, idempotent)
+    local function EnsureCollapseOverlay(btn)
+      if not btn then return nil end
+      if not btn._pfuiCollapseOverlay then
+        local ov = CreateFrame("Frame", btn:GetName() .. "PfCollapse", btn)
+        ov:SetWidth(14)
+        ov:SetHeight(14)
+        ov:SetPoint("LEFT", btn, "LEFT", 3, 0)
+        CreateBackdrop(ov, nil, nil, .9)
+        ov:SetFrameLevel(btn:GetFrameLevel() + 5)
+        ov.text = ov:CreateFontString(nil, "OVERLAY")
+        ov.text:SetFontObject(GameFontWhite)
+        ov.text:SetPoint("CENTER", 0, 0)
+        ov:Hide()
+        btn._pfuiCollapseOverlay = ov
+      end
+      return btn._pfuiCollapseOverlay
+    end
+
+    local function UpdateCollapseOverlayForButton(btn)
+      if not btn then return end
+      local childTex = getglobal(btn:GetName() .. "Texture")
+
+      if btn.Type == 'header' then
+        -- detect +/- by inspecting ATSW's child texture (safe pcall)
+        local glyph = "+"
+        if childTex and childTex.GetTexture then
+          local ok, tex = pcall(function() return childTex:GetTexture() end)
+          if ok and type(tex) == 'string' and string.find(tex, "MinusButton") then glyph = "-" end
+        end
+
+        local ov = EnsureCollapseOverlay(btn)
+        if ov then ov.text:SetText(glyph); ov:Show() end
+
+        if childTex and childTex.Hide then childTex:Hide() end
+      else
+        if btn._pfuiCollapseOverlay then btn._pfuiCollapseOverlay:Hide() end
+        if childTex and childTex.Show then childTex:Show() end
+      end
+    end
+
+    -- Wrap ATSW_UpdateRecipes once (idempotent)
+    if not _G.__pfui_wrapped_ATSW_UpdateRecipes then
+      local original_UpdateRecipes = getglobal('ATSW_UpdateRecipes')
+      if type(original_UpdateRecipes) == 'function' then
+        rawset(_G, '__pfui_original_ATSW_UpdateRecipes', original_UpdateRecipes)
+        local function pfui_wrapped_UpdateRecipes()
+          pcall(original_UpdateRecipes)
+          for i = 1, ATSW_RECIPES_DISPLAYED do
+            UpdateCollapseOverlayForButton(getglobal("ATSWRecipe"..i))
+          end
+        end
+        rawset(_G, 'ATSW_UpdateRecipes', pfui_wrapped_UpdateRecipes)
+        rawset(_G, '__pfui_wrapped_ATSW_UpdateRecipes', true)
+      end
+    end
+
     -- Recipe icon (main selected recipe)
     if ATSWRecipeIcon then
       local texture = getglobal("ATSWRecipeIconTexture")
@@ -329,6 +509,18 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
         for i = 1, ATSW_NECESSARIES_DISPLAYED do
           SkinReagentButton(i)
         end
+          -- Ensure tool names are readable: white when available, red when missing
+          for i = 1, (ATSW_TOOLS_DISPLAYED or 0) do
+            local btn = getglobal('ATSWTool' .. i)
+            local btnText = getglobal('ATSWTool' .. i .. 'Text')
+            if btn and btnText and btn.R ~= nil then
+              if btn.R == 0 then
+                btnText:SetTextColor(1, 1, 1)
+              else
+                btnText:SetTextColor(1, 0, 0)
+              end
+            end
+          end
       end
       ATSWFrame.pfuiShowRecipeHooked = true
     end
@@ -344,6 +536,14 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
           ATSWProgressBar:Show()
           local baseFL = ATSWTaskScrollFrame and ATSWTaskScrollFrame.backdrop and ATSWTaskScrollFrame.backdrop:GetFrameLevel() or ATSWFrame:GetFrameLevel()
           ATSWProgressBar:SetFrameLevel(baseFL + 50)
+
+          -- Strip the decorative border textures for the active task to match pfUI backdrop
+          if ATSWProgressBarBorder then
+            for _, region in ipairs({ATSWProgressBarBorder:GetRegions()}) do
+              if region and region.SetTexture then pcall(function() region:SetTexture(nil) end) end
+            end
+            if ATSWProgressBarBorder.Hide then pcall(function() ATSWProgressBarBorder:Hide() end) end
+          end
         end
 
         -- Re-anchor Stop button to the bar and make sure it's visible
@@ -368,7 +568,7 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
       end)
     end
     
-    -- Fix black text colors for recipe name and description
+    -- Fix black text colors for description; allow ATSW to set recipe name color by quality
     if ATSWRecipeName then
       ATSWRecipeName:SetTextColor(1, 0.82, 0)
     end
@@ -376,13 +576,7 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
       ATSWCraftDescription:SetTextColor(1, 1, 1)
     end
     
-    -- Fix tool text colors
-    for i = 1, ATSW_TOOLS_DISPLAYED do
-      local toolText = getglobal("ATSWTool"..i.."Text")
-      if toolText then
-        toolText:SetTextColor(1, 0.82, 0)
-      end
-    end
+    -- Tool text colors are handled dynamically in ATSW_ShowRecipe hook
     
     -- Buttons
     local buttons = {"ATSWCreateButton","ATSWCreateAllButton","ATSWCancelButton","ATSWCustomEditorButton","ATSWReagentsButton","ATSWTaskButton"}
@@ -497,18 +691,68 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
   StripAndBackdrop(ATSWShoppingListFrame, .75)
   SafeSkinClose(ATSWShoppingListFrame, ATSWShoppingListFrameCloseButton)
 
-  -- Small, tweakable sizing and hit-rect for the shopping list frame.
-  -- Adjust these values to fine-tune the frame size and interactive area.
-  local BACKDROP_INSET_TL_X, BACKDROP_INSET_TL_Y = 0, 0
-  local BACKDROP_INSET_BR_X, BACKDROP_INSET_BR_Y = 0, 0
+  -- Use ATSW's original XML size (keeps internal anchors consistent)
+  ATSWShoppingListFrame:SetWidth(512)
+  ATSWShoppingListFrame:SetHeight(200)
 
-  ATSWShoppingListFrame:SetWidth(460)
-  ATSWShoppingListFrame:SetHeight(140)
+  -- Ensure the clickable area covers the whole frame (prevent mouse events falling through to WorldFrame)
+  if ATSWShoppingListFrame.SetHitRectInsets then
+    ATSWShoppingListFrame:SetHitRectInsets(20, 40, 0, 60) -- left, right, top, bottom
+  end
 
+  -- Align the pfUI backdrop to match the shopping list's hit rect exactly
+  if ATSWShoppingListFrame.backdrop then
+    ATSWShoppingListFrame.backdrop:SetPoint("TOPLEFT", ATSWShoppingListFrame, "TOPLEFT", 20, 0)
+    ATSWShoppingListFrame.backdrop:SetPoint("BOTTOMRIGHT", ATSWShoppingListFrame, "BOTTOMRIGHT", -40, 60)
+
+    if ATSWShoppingListFrameTitleText then
+      ATSWShoppingListFrameTitleText:SetPoint("TOP", ATSWShoppingListFrame.backdrop, "TOP", 0, -5)
+    end
+  end
+
+
+  -- Finalize scrollbar skinning and buttons
   SafeSkinScrollbar(ATSWSLScrollFrame, ATSWSLScrollFrameScrollBar)
   do
     local _slButtons = {"ATSWSLCloseButton"}
     ApplySkin(SkinButton, _slButtons)
+  end
+
+  -- Skin ATSW recipe tooltips (crafted-item tooltip + reagent info tooltip)
+  if ATSWRecipeTooltip then
+    -- use pfUI backdrop instead of the embedded backdrop so visuals match
+    EnsureBackdrop(ATSWRecipeTooltip, .85, true)
+    -- Re-apply pfUI visual on show (helps handle dynamic content updates)
+    if HookScript then
+      HookScript(ATSWRecipeTooltip, "OnShow", function()
+        EnsureBackdrop(ATSWRecipeTooltip, .85, true)
+      end)
+    end
+  end
+
+  if ATSWRecipeItemTooltip then
+    -- Keep the inner/native item tooltip backdrop-less so it visually blends with the
+    -- outer ATSW tooltip. We still strip textures and ensure no backdrop is present.
+    StripTextures(ATSWRecipeItemTooltip)
+    ATSWRecipeItemTooltip:SetBackdrop(nil)
+
+    -- Do NOT create a pfUI backdrop for this inner tooltip; instead match its width
+    -- to the parent ATSWRecipeTooltip on show so the text can fill the same area.
+    if HookScript then
+      HookScript(ATSWRecipeItemTooltip, "OnShow", function()
+        if not ATSWRecipeItemTooltip then return end
+        StripTextures(ATSWRecipeItemTooltip)
+        ATSWRecipeItemTooltip:SetBackdrop(nil)
+
+        if ATSWRecipeTooltip and ATSWRecipeTooltip.GetWidth and ATSWRecipeItemTooltip.SetWidth then
+          local pw = ATSWRecipeTooltip:GetWidth()
+          if pw and pw > 0 then
+            -- leave a small padding so the inner text doesn't touch the border
+            ATSWRecipeItemTooltip:SetWidth(math.max(0, pw - 24))
+          end
+        end
+      end)
+    end
   end
   
   -- Buy Necessary Frame
@@ -569,9 +813,28 @@ pfUI.addonskinner:RegisterSkin("AdvancedTradeSkillWindow2", function()
   end
 
   -- Category name edit box
-  if ATSWCSNewCategoryBox then
-    StripTextures(ATSWCSNewCategoryBox, true, "BACKGROUND")
+  local function EnsureCSNewCategoryBoxSkin()
+    if not ATSWCSNewCategoryBox or ATSWCSNewCategoryBox._pfuiSkinned then return end
+
+    -- Remove the decorative 3-part ARTWORK textures and replace with a pfUI backdrop
+    StripTextures(ATSWCSNewCategoryBox, true) -- hide all regions (ARTWORK/BACKGROUND)
     CreateBackdrop(ATSWCSNewCategoryBox, nil, true)
+
+    -- match search box font styling
+    if ATSWCSNewCategoryBox.SetFont then
+      ATSWCSNewCategoryBox:SetFont(pfUI.font_default, pfUI_config.global.font_size, "OUTLINE")
+    end
+
+    ATSWCSNewCategoryBox._pfuiSkinned = true
+  end
+
+  -- Try to skin now and also when the related frames show (cover creation timing)
+  EnsureCSNewCategoryBoxSkin()
+  if ATSWCSFrame and HookScript then
+    HookScript(ATSWCSFrame, "OnShow", EnsureCSNewCategoryBoxSkin)
+  elseif ATSWFrame and HookScript then
+    -- as a fallback, run when main ATSW frame shows (editor is opened via buttons)
+    HookScript(ATSWFrame, "OnShow", EnsureCSNewCategoryBoxSkin)
   end
 
   if ATSWCSFrameMoveUp then SkinArrowButton(ATSWCSFrameMoveUp, "up") end
