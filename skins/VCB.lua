@@ -7,10 +7,32 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
   local HookAddonOrVariable = penv.HookAddonOrVariable
 
   local ICON_INSET = -3
+  local COUNT_LAYER_DEFAULT = 320
+  local COUNT_LAYER_CONSOLIDATED = 340
 
   -- NOTE: Avoid using varargs ('...') in function definitions or overrides in this skin.
   -- Varargs have caused syntax/runtime issues in the target (vanilla 1.12) environment.
   -- Use `hooksecurefunc` or explicit-argument wrappers instead of `function(self, ...)`.
+
+  local function applyCountLayer(count, parent, frameLevel, drawLayer)
+    if not count then return end
+    pcall(function()
+      if count.SetParent then count:SetParent(parent) end
+      if count.SetDrawLayer then count:SetDrawLayer("OVERLAY", drawLayer) end
+      if count.SetFrameLevel then count:SetFrameLevel(frameLevel) end
+    end)
+  end
+
+  local function fixChildButtonLayers(b, parentLvl)
+    if not b then return end
+    if b.SetFrameLevel then b:SetFrameLevel(parentLvl + 20) end
+    if b.backdrop and b.backdrop.SetFrameLevel then b.backdrop:SetFrameLevel(parentLvl + 10) end
+    local n = b:GetName() or ""
+    local ic = _G[n .. "Icon"]
+    if ic and ic.SetDrawLayer then ic:SetDrawLayer("OVERLAY", 250) end
+    if ic and ic.SetFrameLevel then ic:SetFrameLevel(parentLvl + 30) end
+    applyCountLayer(_G[n .. "Count"], b, parentLvl + 50, COUNT_LAYER_CONSOLIDATED)
+  end
 
   local function skinButton(btn)
     if btn._pfuiSkinned then return end
@@ -48,12 +70,8 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
     do
       local count = _G[name .. "Count"]
       if count then
-        pcall(function()
-          if count.SetParent then count:SetParent(btn) end
-          if count.SetDrawLayer then count:SetDrawLayer("OVERLAY", 320) end
-          if count.SetFrameLevel then count:SetFrameLevel((btn:GetFrameLevel() or 0) + 40) end
-          if count.Show then count:Show() end
-        end)
+        local lvl = (btn:GetFrameLevel() or 0) + 40
+        applyCountLayer(count, btn, lvl, COUNT_LAYER_DEFAULT)
       end
     end
     -- If this is a regular buff button, force a black border and skip VCB color forwarding.
@@ -96,7 +114,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
   -- Reapply layering & icon settings without recreating backdrops.
   -- Used when VCB updates buttons (dummy mode toggle / config close) which may reset parents/levels.
   local function reapplyButton(btn)
-    if not btn then return end
+    if not btn or not btn._pfuiSkinned then return end
     local name = btn:GetName() or ""
     local icon = _G[name .. "Icon"]
     pcall(function()
@@ -123,11 +141,10 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
         -- ensure the stack/count text sits above icons and backdrops for visibility
         local count = _G[name .. "Count"]
         if count then
-          if count.SetParent then count:SetParent(btn) end
-          if count.SetDrawLayer then count:SetDrawLayer("OVERLAY", 320) end
-          if count.SetFrameLevel then count:SetFrameLevel((btn:GetFrameLevel() or 0) + 40) end
-          if count.Show then count:Show() end
-        end      end
+          local lvl = (btn:GetFrameLevel() or 0) + 40
+          applyCountLayer(count, btn, lvl, COUNT_LAYER_DEFAULT)
+        end
+      end
     end)
   end
 
@@ -285,8 +302,8 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
 
     -- reapply consolidated icon layout on show (compact)
     local origOnShow = VCB_BF_CONSOLIDATED_BUFFFRAME:GetScript("OnShow")
-    VCB_BF_CONSOLIDATED_BUFFFRAME:SetScript("OnShow", function()
-      if origOnShow then origOnShow() end
+    VCB_BF_CONSOLIDATED_BUFFFRAME:SetScript("OnShow", function(self)
+      if origOnShow then origOnShow(self) end
       pcall(function()
         SetAllPointsOffset(VCB_BF_CONSOLIDATED_ICONIcon, VCB_BF_CONSOLIDATED_ICON.backdrop or VCB_BF_CONSOLIDATED_ICON, ICON_INSET + 4)
         VCB_BF_CONSOLIDATED_ICONIcon:SetParent(VCB_BF_CONSOLIDATED_ICON)
@@ -304,21 +321,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
             if b and b:GetParent() == VCB_BF_CONSOLIDATED_BUFFFRAME then
               local parentLvl = VCB_BF_CONSOLIDATED_BUFFFRAME:GetFrameLevel() or 0
               -- ensure button sits above the consolidated frame backdrop but below overlays like the icon and text
-              if b.SetFrameLevel then b:SetFrameLevel(parentLvl + 20) end
-              if b.backdrop and b.backdrop.SetFrameLevel then b.backdrop:SetFrameLevel(parentLvl + 10) end
-              local n = b:GetName() or ""
-              local ic = _G[n .. "Icon"]
-              if ic and ic.SetDrawLayer then ic:SetDrawLayer("OVERLAY", 250) end
-              if ic and ic.SetFrameLevel then ic:SetFrameLevel(parentLvl + 30) end
-
-              -- ensure the stack/count text for this child button sits above other elements
-              local cnt = _G[n .. "Count"]
-              if cnt then
-                if cnt.SetParent then cnt:SetParent(b) end
-                if cnt.SetDrawLayer then cnt:SetDrawLayer("OVERLAY", 340) end
-                if cnt.SetFrameLevel then cnt:SetFrameLevel(parentLvl + 50) end
-                if cnt.Show then cnt:Show() end
-              end
+              fixChildButtonLayers(b, parentLvl)
             end
           end
 
@@ -327,19 +330,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
             local b = _G["VCB_BF_DEBUFF_BUTTON" .. i]
             if b and b:GetParent() == VCB_BF_CONSOLIDATED_BUFFFRAME then
               local parentLvl = VCB_BF_CONSOLIDATED_BUFFFRAME:GetFrameLevel() or 0
-              if b.SetFrameLevel then b:SetFrameLevel(parentLvl + 20) end
-              if b.backdrop and b.backdrop.SetFrameLevel then b.backdrop:SetFrameLevel(parentLvl + 10) end
-              local n = b:GetName() or ""
-              local ic = _G[n .. "Icon"]
-              if ic and ic.SetDrawLayer then ic:SetDrawLayer("OVERLAY", 250) end
-              if ic and ic.SetFrameLevel then ic:SetFrameLevel(parentLvl + 30) end
-              local cnt = _G[n .. "Count"]
-              if cnt then
-                if cnt.SetParent then cnt:SetParent(b) end
-                if cnt.SetDrawLayer then cnt:SetDrawLayer("OVERLAY", 340) end
-                if cnt.SetFrameLevel then cnt:SetFrameLevel(parentLvl + 50) end
-                if cnt.Show then cnt:Show() end
-              end
+              fixChildButtonLayers(b, parentLvl)
             end
           end
 
@@ -348,19 +339,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
             local b = _G["VCB_BF_WEAPON_BUTTON" .. i]
             if b and b:GetParent() == VCB_BF_CONSOLIDATED_BUFFFRAME then
               local parentLvl = VCB_BF_CONSOLIDATED_BUFFFRAME:GetFrameLevel() or 0
-              if b.SetFrameLevel then b:SetFrameLevel(parentLvl + 20) end
-              if b.backdrop and b.backdrop.SetFrameLevel then b.backdrop:SetFrameLevel(parentLvl + 10) end
-              local n = b:GetName() or ""
-              local ic = _G[n .. "Icon"]
-              if ic and ic.SetDrawLayer then ic:SetDrawLayer("OVERLAY", 250) end
-              if ic and ic.SetFrameLevel then ic:SetFrameLevel(parentLvl + 30) end
-              local cnt = _G[n .. "Count"]
-              if cnt then
-                if cnt.SetParent then cnt:SetParent(b) end
-                if cnt.SetDrawLayer then cnt:SetDrawLayer("OVERLAY", 340) end
-                if cnt.SetFrameLevel then cnt:SetFrameLevel(parentLvl + 50) end
-                if cnt.Show then cnt:Show() end
-              end
+              fixChildButtonLayers(b, parentLvl)
             end
           end
         end)
