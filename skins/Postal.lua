@@ -15,21 +15,21 @@ local function GetLinkColor(link)
   return r, g, b
 end
 
-local function SetQualityBorder(btn, link, hasItem)
+local function SetQualityBorder(btn, link, hasItem, quality)
   if not btn then return end
   local target = btn.backdrop
   if not target or not target.SetBackdropBorderColor then target = btn end
   if not target or not target.SetBackdropBorderColor then return end
 
-  local quality = nil
-  if link then
+  local resolvedQuality = quality
+  if resolvedQuality == nil and link then
     local _, _, q = GetItemInfo(link)
-    if q then quality = q end
+    if q ~= nil then resolvedQuality = q end
   end
 
   local r, g, b = nil, nil, nil
-  if quality and quality > 0 then
-    r, g, b = GetItemQualityColor(quality)
+  if resolvedQuality ~= nil and resolvedQuality >= 0 then
+    r, g, b = GetItemQualityColor(resolvedQuality)
   else
     r, g, b = GetLinkColor(link)
   end
@@ -48,6 +48,14 @@ local function SetQualityBorder(btn, link, hasItem)
     btn.rr, btn.rg, btn.rb, btn.ra = br, bg, bb, ba
     btn.cr, btn.cg, btn.cb, btn.ca = br, bg, bb, ba
   end
+end
+
+local function GetInboxItemQuality(index)
+  if not index or not GetInboxItem then return nil end
+  local _, _, _, quality = GetInboxItem(index, 1)
+  if quality ~= nil then return quality end
+  local _, _, _, fallbackQuality = GetInboxItem(index)
+  return fallbackQuality
 end
 
 local function SkinMailItemButtons()
@@ -73,7 +81,8 @@ local function SkinMailItemButtons()
         if name then link = pfUI.api.GetItemLinkByName(name) end
       end
 
-      SetQualityBorder(btn, link, hasItem)
+      local quality = GetInboxItemQuality(index)
+      SetQualityBorder(btn, link, hasItem, quality)
       btn.locked = true
     end
   end
@@ -81,6 +90,12 @@ end
 
 local function UpdateOpenMailButton(index)
   if not OpenMailPackageButton then return end
+  local hasItem = false
+  if index and GetInboxHeaderInfo then
+    local _, _, _, _, _, _, _, item = GetInboxHeaderInfo(index)
+    hasItem = item and true or false
+  end
+
   local link = nil
   if index and GetInboxItemLink then
     link = GetInboxItemLink(index)
@@ -89,7 +104,9 @@ local function UpdateOpenMailButton(index)
     local name = GetInboxItem(index)
     if name then link = pfUI.api.GetItemLinkByName(name) end
   end
-  SetQualityBorder(OpenMailPackageButton, link, link and true or false)
+
+  local quality = GetInboxItemQuality(index)
+  SetQualityBorder(OpenMailPackageButton, link, hasItem or (link and true or false), quality)
   OpenMailPackageButton.locked = true
 end
 local function SkinPostalAttachments()
