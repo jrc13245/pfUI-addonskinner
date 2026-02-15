@@ -36,6 +36,7 @@ skins\ignitestatus.lua
 skins\ItemHints.lua
 skins\ItemRack.lua
 skins\LevelRange.lua
+skins\LevelRange-Turtle.lua
 skins\LootBlare.lua
 skins\LoseControl.lua
 skins\ManaStones.lua
