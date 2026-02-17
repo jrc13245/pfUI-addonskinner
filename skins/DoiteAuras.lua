@@ -410,24 +410,73 @@ pfUI.addonskinner:RegisterSkin("DoiteAuras", function()
   end
   
   -- ============================================
-  -- MAIN SKINNING LOOP
+  -- HOOK ONSHOW EVENTS (EVENT-DRIVEN SKINNING)
   -- ============================================
-  local updateFrame = CreateFrame("Frame")
-  updateFrame.elapsed = 0
-  updateFrame:SetScript("OnUpdate", function()
-    this.elapsed = this.elapsed + arg1
-    if this.elapsed > 0.2 then  -- Check every 0.2 seconds (faster than 0.5)
-      this.elapsed = 0
-      
-      -- Skin all frames
-      SkinMainFrame()
+  
+  -- Helper to hook OnShow
+  local function HookFrameShow(frame, skinFunc)
+    if not frame then return end
+    
+    local origOnShow = frame:GetScript("OnShow")
+    frame:SetScript("OnShow", function()
+      if origOnShow then origOnShow() end
+      skinFunc()
+      SkinListElements()  -- Reskin dynamic list elements when frame shows
+      SkinConditionRows() -- Reskin dynamic condition rows when frame shows
+    end)
+    
+    -- Skin immediately if already shown
+    if frame:IsVisible() then
+      skinFunc()
       SkinListElements()
-      SkinEditFrame()
       SkinConditionRows()
-      SkinExportFrame()
-      SkinImportFrame()
-      SkinSettingsFrame()
-      SkinCategoryConfirm()
+    end
+  end
+  
+  -- Wait for frames to be created, then hook them
+  local initFrame = CreateFrame("Frame")
+  initFrame:RegisterEvent("ADDON_LOADED")
+  initFrame:SetScript("OnEvent", function()
+    if arg1 == "DoiteAuras" then
+      -- Give frames a moment to fully initialize
+      local delayFrame = CreateFrame("Frame")
+      delayFrame.elapsed = 0
+      delayFrame:SetScript("OnUpdate", function()
+        this.elapsed = this.elapsed + arg1
+        if this.elapsed > 0.5 then
+          this:SetScript("OnUpdate", nil)
+          
+          -- Hook main frame
+          if DoiteAurasFrame then
+            HookFrameShow(DoiteAurasFrame, SkinMainFrame)
+          end
+          
+          -- Hook edit/conditions frame
+          if DoiteConditionsFrame then
+            HookFrameShow(DoiteConditionsFrame, SkinEditFrame)
+          end
+          
+          -- Hook export frame
+          if DoiteAurasExportFrame then
+            HookFrameShow(DoiteAurasExportFrame, SkinExportFrame)
+          end
+          
+          -- Hook import frame
+          if DoiteAurasImportFrame then
+            HookFrameShow(DoiteAurasImportFrame, SkinImportFrame)
+          end
+          
+          -- Hook settings frame
+          if DoiteAurasSettingsFrame then
+            HookFrameShow(DoiteAurasSettingsFrame, SkinSettingsFrame)
+          end
+          
+          -- Hook category confirm (it may not exist yet)
+          if DoiteCond_CategoryConfirmFrame then
+            HookFrameShow(DoiteCond_CategoryConfirmFrame, SkinCategoryConfirm)
+          end
+        end
+      end)
     end
   end)
   
