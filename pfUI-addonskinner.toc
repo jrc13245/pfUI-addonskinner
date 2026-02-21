@@ -63,6 +63,7 @@ skins\SuperIgnore.lua
 skins\SuperInspect_UI.lua
 skins\SuperMacro.lua
 skins\TalentSequence.lua
+skins\Talented.lua
 skins\Thaliz.lua
 skins\TimeManager.lua
 skins\TradesBar.lua
