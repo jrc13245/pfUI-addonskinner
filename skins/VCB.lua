@@ -7,6 +7,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
   local HookAddonOrVariable = penv.HookAddonOrVariable
 
   local ICON_INSET = -3
+  local CONSOLIDATED_HITRECT_EXPAND = 2
   local COUNT_LAYER_DEFAULT = 320
   local COUNT_LAYER_CONSOLIDATED = 340
 
@@ -148,6 +149,29 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
     end)
   end
 
+  -- ICON_INSET is negative for visuals, which can shrink mouse hit-rect via pfUI.CreateBackdrop.
+  -- Expand consolidated hit-rects so moving cursor from icon to popup frame stays contiguous.
+  local function applyConsolidatedHitRectFix()
+    pcall(function()
+      if VCB_BF_CONSOLIDATED_ICON and VCB_BF_CONSOLIDATED_ICON.SetHitRectInsets then
+        VCB_BF_CONSOLIDATED_ICON:SetHitRectInsets(
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND
+        )
+      end
+      if VCB_BF_CONSOLIDATED_BUFFFRAME and VCB_BF_CONSOLIDATED_BUFFFRAME.SetHitRectInsets then
+        VCB_BF_CONSOLIDATED_BUFFFRAME:SetHitRectInsets(
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND,
+          -CONSOLIDATED_HITRECT_EXPAND
+        )
+      end
+    end)
+  end
+
   local function skinAll()
     -- assume VCB defines indices (minimal checks)
     for i = 0, VCB_MAXINDEX.buff do skinButton(_G["VCB_BF_BUFF_BUTTON" .. i]) end
@@ -207,6 +231,8 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
           end)
         end)
       end)
+
+      applyConsolidatedHitRectFix()
     end)
   end
 
@@ -305,6 +331,7 @@ pfUI.addonskinner:RegisterSkin("VCB", function()
     VCB_BF_CONSOLIDATED_BUFFFRAME:SetScript("OnShow", function(self)
       if origOnShow then origOnShow(self) end
       pcall(function()
+        applyConsolidatedHitRectFix()
         SetAllPointsOffset(VCB_BF_CONSOLIDATED_ICONIcon, VCB_BF_CONSOLIDATED_ICON.backdrop or VCB_BF_CONSOLIDATED_ICON, ICON_INSET + 4)
         VCB_BF_CONSOLIDATED_ICONIcon:SetParent(VCB_BF_CONSOLIDATED_ICON)
         pcall(function() VCB_BF_CONSOLIDATED_ICONIcon:SetVertexColor(1,1,1,1) end)
